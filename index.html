@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>生物特徵解碼器 - 國小自然挑戰賽</title>
+    <style>
+        :root {
+            --primary-green: #2d6a4f;
+            --light-green: #d8f3dc;
+            --accent-green: #95d5b2;
+            --text-dark: #1b4332;
+            --bg-color: #f7fff7;
+        }
+
+        body {
+            font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
+            background-color: var(--light-green);
+            color: var(--text-dark);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        #game-container {
+            background: white;
+            width: 90%;
+            max-width: 650px;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .hidden { display: none; }
+
+        h1 { color: var(--primary-green); margin-top: 0; }
+        .description { font-size: 1.1rem; line-height: 1.6; margin-bottom: 25px; color: #444; }
+        
+        .btn {
+            background-color: var(--primary-green);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 0 #1b4332;
+        }
+
+        .btn:active { transform: translateY(4px); box-shadow: none; }
+
+        /* 遊戲進行中樣式 */
+        .question-info { font-weight: bold; color: #666; margin-bottom: 10px; font-size: 0.9rem; }
+        .target-box {
+            background: #f0fff4;
+            border: 3px dashed var(--accent-green);
+            padding: 25px;
+            margin-bottom: 25px;
+            font-size: 1.6rem;
+            border-radius: 15px;
+            color: var(--primary-green);
+            font-weight: bold;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .option-btn {
+            padding: 18px;
+            background: white;
+            border: 2px solid var(--accent-green);
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: all 0.2s;
+            color: var(--text-dark);
+        }
+
+        .option-btn:hover { background: var(--light-green); border-color: var(--primary-green); }
+
+        /* 結算頁面樣式 */
+        .result-card { background: #f9f9f9; padding: 20px; border-radius: 15px; margin-top: 20px; }
+        .review-container { max-height: 300px; overflow-y: auto; text-align: left; margin-top: 15px; }
+        .review-item {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .correct { color: var(--primary-green); font-weight: bold; }
+        .wrong { color: #d90429; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- 介紹頁 -->
+    <div id="start-screen">
+        <h1>🌿 生物特徵解碼器</h1>
+        <p class="description">
+            歡迎挑戰國小四年級自然知識！<br>
+            系統將隨機挑選 6 種生物，<br>
+            請選出正確的構造或分類特徵。<br>
+            <strong>不重複出題機制已啟動。</strong>
+        </p>
+        <button class="btn" onclick="startGame()">開始任務</button>
+    </div>
+
+    <!-- 遊戲進行頁 -->
+    <div id="game-screen" class="hidden">
+        <div class="question-info">進度：第 <span id="q-count">1</span> / 6 題</div>
+        <div class="target-box">
+            目標對象：<span id="target-name">載入中...</span>
+        </div>
+        <p style="color: #666;">請選出符合它的特徵組合：</p>
+        <div id="options" class="options-grid"></div>
+    </div>
+
+    <!-- 結算頁 -->
+    <div id="result-screen" class="hidden">
+        <h1>🎉 任務完成！</h1>
+        <div class="result-card">
+            <h2 id="final-score" style="margin: 0; color: var(--primary-green);">分數：0</h2>
+            <p id="score-comment"></p>
+        </div>
+        <div id="review-list" class="review-container"></div>
+        <br>
+        <button class="btn" onclick="startGame()">再挑戰 6 題</button>
+    </div>
+</div>
+
+<script>
+    const fullBank = [
+        // 植物類 (1-35)
+        { id: 1, name: "榕樹", trait: "木本植物、網狀脈", options: ["木本植物、網狀脈", "草本植物、平行脈", "木本植物、平行脈"] },
+        { id: 2, name: "杜鵑花", trait: "木本植物、有花瓣", options: ["木本植物、有花瓣", "草本植物、無花瓣", "水生植物、有氣室"] },
+        { id: 3, name: "水稻", trait: "草本植物、平行脈", options: ["草本植物、平行脈", "木本植物、網狀脈", "草本植物、網狀脈"] },
+        { id: 4, name: "蓮花", trait: "水生植物、挺水生長", options: ["水生植物、挺水生長", "陸生植物、網狀脈", "水生植物、沉水生長"] },
+        { id: 5, name: "大王蓮", trait: "水生植物、浮水葉", options: ["水生植物、浮水葉", "陸生植物、針狀葉", "水生植物、沉水葉"] },
+        { id: 6, name: "蘇鐵", trait: "木本植物、不開花(裸子)", options: ["木本植物、不開花(裸子)", "草本植物、開鮮豔花", "水生植物、網狀脈"] },
+        { id: 7, name: "玉米", trait: "草本、鬚根系", options: ["草本、鬚根系", "木本、軸根系", "草本、軸根系"] },
+        { id: 8, name: "綠豆", trait: "草本、軸根系", options: ["草本、軸根系", "草本、鬚根系", "木本、軸根系"] },
+        { id: 9, name: "仙人掌", trait: "針狀葉、儲存水分", options: ["針狀葉、儲存水分", "寬大葉片、蒸散快", "平行脈、水生"] },
+        { id: 10, name: "布袋蓮", trait: "葉柄膨大、有氣室", options: ["葉柄膨大、有氣室", "莖部堅硬、木本", "葉片沉在水底"] },
+        { id: 11, name: "竹子", trait: "草本、莖有節", options: ["草本、莖有節", "木本、無節", "水生、沉水"] },
+        { id: 12, name: "鳳凰木", trait: "木本、羽狀複葉", options: ["木本、羽狀複葉", "草本、平行脈", "水生、浮水葉"] },
+        { id: 13, name: "聖誕紅", trait: "木本、紅色的苞葉", options: ["木本、紅色的苞葉", "草本、紅色花瓣", "水生、網狀脈"] },
+        { id: 14, name: "含羞草", trait: "觸碰葉片會閉合", options: ["觸碰葉片會閉合", "會捕食昆蟲", "葉片終年不凋謝"] },
+        { id: 15, name: "豬籠草", trait: "捕蟲植物、構造特化", options: ["捕蟲植物、構造特化", "水生植物、平行脈", "木本植物、軸根系"] },
+        { id: 16, name: "酢醬草", trait: "草本、三出複葉", options: ["草本、三出複葉", "木本、針狀葉", "水生、挺水"] },
+        { id: 17, name: "蒲公英", trait: "種子有毛、靠風傳播", options: ["種子有毛、靠風傳播", "果實肉質、靠動物", "靠水力傳播"] },
+        { id: 18, name: "鬼針草", trait: "果實有鉤、靠動物傳播", options: ["果實有鉤、靠動物傳播", "靠風力傳播", "靠彈力傳播"] },
+        { id: 19, name: "椰子樹", trait: "木本、生長在海邊", options: ["木本、生長在海邊", "草本、生長在沙漠", "水生、沉水"] },
+        { id: 20, name: "捕蠅草", trait: "感應獵物後快速閉合", options: ["感應獵物後快速閉合", "靠香氣吸引蝴蝶", "靠風散播孢子"] },
+        { id: 21, name: "向日葵", trait: "草本、花會隨日照轉動", options: ["草本、花會隨日照轉動", "木本、網狀脈", "水生、浮水"] },
+        { id: 22, name: "銀杏", trait: "木本、扇形葉片", options: ["木本、扇形葉片", "草本、針狀葉", "非植物、孢子繁殖"] },
+        { id: 23, name: "台灣百合", trait: "草本、鱗莖繁殖", options: ["草本、鱗莖繁殖", "木本、軸根系", "水生、平行脈"] },
+        { id: 24, name: "浮萍", trait: "水生、最小的開花植物", options: ["水生、最小的開花植物", "陸生、平行脈", "木本、網狀脈"] },
+        { id: 25, name: "萬年青", trait: "草本、耐陰性強", options: ["草本、耐陰性強", "木本、需強光", "水生、沉水"] },
+        { id: 26, name: "苦楝", trait: "木本、春天開紫花", options: ["木本、春天開紫花", "草本、平行脈", "水生、挺水"] },
+        { id: 27, name: "樟樹", trait: "木本、全株有香味", options: ["木本、全株有香味", "草本、鬚根系", "水生、平行脈"] },
+        { id: 28, name: "牽牛花", trait: "草本、攀緣莖", options: ["草本、攀緣莖", "木本、直立莖", "水生、氣生根"] },
+        { id: 29, name: "芒草", trait: "草本、花序隨風搖曳", options: ["草本、花序隨風搖曳", "木本、網狀脈", "捕蟲植物"] },
+        { id: 30, name: "金桔", trait: "木本、果實可食", options: ["木本、果實可食", "草本、平行脈", "水生、浮水"] },
+        { id: 31, name: "桑樹", trait: "木本、葉可餵蠶", options: ["木本、葉可餵蠶", "草本、葉有刺", "水生、沉水"] },
+        { id: 32, name: "黃金葛", trait: "草本、適應水培與土耕", options: ["草本、適應水培與土耕", "木本、軸根系", "不開花植物"] },
+        { id: 33, name: "楓香", trait: "木本、秋天葉變色", options: ["木本、秋天葉變色", "草本、平行脈", "水生、氣室"] },
+        { id: 34, name: "草莓", trait: "草本、匍匐莖", options: ["草本、匍匐莖", "木本、直立莖", "水生、沉水"] },
+        { id: 35, name: "金針花", trait: "草本、一日花", options: ["草本、一日花", "木本、針狀葉", "水生、挺水"] },
+
+        // 動物類 (36-80)
+        { id: 36, name: "麻雀", trait: "脊椎動物、卵生", options: ["脊椎動物、卵生", "無脊椎動物、胎生", "脊椎動物、胎生"] },
+        { id: 37, name: "海豚", trait: "脊椎動物、胎生", options: ["脊椎動物、胎生", "脊椎動物、卵生", "無脊椎動物、胎生"] },
+        { id: 38, name: "大肚魚", trait: "脊椎動物、卵胎生", options: ["脊椎動物、卵胎生", "無脊椎動物、卵生", "脊椎動物、胎生"] },
+        { id: 39, name: "蜻蜓", trait: "無脊椎、六隻腳", options: ["無脊椎、六隻腳", "脊椎動物、六隻腳", "無脊椎、八隻腳"] },
+        { id: 40, name: "蜘蛛", trait: "無脊椎、八隻腳", options: ["無脊椎、八隻腳", "無脊椎、六隻腳", "脊椎動物、八隻腳"] },
+        { id: 41, name: "青蛙", trait: "脊椎、幼年用鰓呼吸", options: ["脊椎、幼年用鰓呼吸", "無脊椎、終生用肺", "脊椎、終生用鰓"] },
+        { id: 42, name: "蝙蝠", trait: "脊椎動物、會飛的哺乳類", options: ["脊椎動物、會飛的哺乳類", "脊椎動物、卵生的鳥類", "無脊椎、有翅膀"] },
+        { id: 43, name: "烏龜", trait: "脊椎、有鱗片或角質板", options: ["脊椎、有鱗片或角質板", "無脊椎、皮膚濕潤", "脊椎、胎生動物"] },
+        { id: 44, name: "蚯蚓", trait: "無脊椎、環節動物", options: ["無脊椎、環節動物", "脊椎動物、爬行", "無脊椎、有外殼"] },
+        { id: 45, name: "蝸牛", trait: "無脊椎、有外殼與腹足", options: ["無脊椎、有外殼與腹足", "脊椎動物、卵生", "無脊椎、六隻腳"] },
+        { id: 46, name: "蝴蝶", trait: "完全變態(卵幼蛹成)", options: ["完全變態(卵幼蛹成)", "不完全變態", "胎生動物"] },
+        { id: 47, name: "蝗蟲", trait: "不完全變態(無蛹期)", options: ["不完全變態(無蛹期)", "完全變態(有蛹期)", "卵胎生"] },
+        { id: 48, name: "企鵝", trait: "脊椎、卵生、鳥類", options: ["脊椎、卵生、鳥類", "脊椎、胎生、哺乳類", "脊椎、卵生、魚類"] },
+        { id: 49, name: "鴨嘴獸", trait: "脊椎、卵生哺乳類", options: ["脊椎、卵生哺乳類", "脊椎、胎生哺乳類", "無脊椎、卵生"] },
+        { id: 50, name: "吳郭魚", trait: "脊椎、鰭移動、鰓呼吸", options: ["脊椎、鰭移動、鰓呼吸", "脊椎、肺呼吸", "無脊椎、鰓呼吸"] },
+        { id: 51, name: "螃蟹", trait: "無脊椎、有殼、十隻腳", options: ["無脊椎、有殼、十隻腳", "無脊椎、六隻腳", "脊椎、十隻腳"] },
+        { id: 52, name: "蜜蜂", trait: "無脊椎、昆蟲、社會性", options: ["無脊椎、昆蟲、社會性", "脊椎、有毒針", "無脊椎、八隻腳"] },
+        { id: 53, name: "蛇", trait: "脊椎、爬蟲類、無足", options: ["脊椎、爬蟲類、無足", "無脊椎、節肢動物", "脊椎、兩棲類"] },
+        { id: 54, name: "袋鼠", trait: "脊椎、有育兒袋、胎生", options: ["脊椎、有育兒袋、胎生", "脊椎、卵生", "無脊椎、胎生"] },
+        { id: 55, name: "章魚", trait: "無脊椎、軟體動物", options: ["無脊椎、軟體動物", "脊椎動物、魚類", "無脊椎、節肢動物"] },
+        { id: 56, name: "水母", trait: "無脊椎、刺絲胞動物", options: ["無脊椎、刺絲胞動物", "脊椎動物、魚類", "無脊椎、軟體動物"] },
+        { id: 57, name: "貓頭鷹", trait: "脊椎、鳥類、肉食性", options: ["脊椎、鳥類、肉食性", "脊椎、哺乳類", "無脊椎、卵生"] },
+        { id: 58, name: "梅花鹿", trait: "脊椎、草食性、胎生", options: ["脊椎、草食性、胎生", "脊椎、肉食性", "無脊椎、胎生"] },
+        { id: 59, name: "壁虎", trait: "脊椎、爬蟲類、有趾墊", options: ["脊椎、爬蟲類、有趾墊", "無脊椎、皮膚濕潤", "脊椎、兩棲類"] },
+        { id: 60, name: "鱷魚", trait: "脊椎、爬蟲類、卵生", options: ["脊椎、爬蟲類、卵生", "脊椎、兩棲類", "無脊椎、胎生"] },
+        { id: 61, name: "蟬", trait: "昆蟲、吸食樹汁", options: ["昆蟲、吸食樹汁", "鳥類、有羽毛", "無脊椎、八隻腳"] },
+        { id: 62, name: "螢火蟲", trait: "昆蟲、發光通訊", options: ["昆蟲、發光通訊", "鳥類、夜行性", "無脊椎、非昆蟲"] },
+        { id: 63, name: "海馬", trait: "脊椎、魚類、雄性育兒", options: ["脊椎、魚類、雄性育兒", "無脊椎、軟體動物", "脊椎、哺乳類"] },
+        { id: 64, name: "珊瑚", trait: "無脊椎、刺絲胞、群聚", options: ["無脊椎、刺絲胞、群聚", "植物、光合作用", "脊椎、魚類"] },
+        { id: 65, name: "彈塗魚", trait: "魚類、可用胸鰭爬行", options: ["魚類、可用胸鰭爬行", "兩棲類、皮膚濕潤", "哺乳類、胎生"] },
+        { id: 66, name: "蚊子", trait: "昆蟲、發育為完全變態", options: ["昆蟲、發育為完全變態", "昆蟲、不完全變態", "無脊椎、非昆蟲"] },
+        { id: 67, name: "大白鯊", trait: "脊椎、魚類、軟骨", options: ["脊椎、魚類、軟骨", "脊椎、硬骨魚類", "無脊椎、胎生"] },
+        { id: 68, name: "寄居蟹", trait: "無脊椎、節肢動物、換殼", options: ["無脊椎、節肢動物、換殼", "無脊椎、自己生長殼", "脊椎動物"] },
+        { id: 69, name: "蝦子", trait: "無脊椎、節肢、有泳足", options: ["無脊椎、節肢、有泳足", "脊椎動物、魚類", "無脊椎、軟體動物"] },
+        { id: 70, name: "老鼠", trait: "哺乳類、有門齒", options: ["哺乳類、有門齒", "鳥類、卵生", "無脊椎、胎生"] },
+        { id: 71, name: "孔雀", trait: "鳥類、羽毛鮮豔、卵生", options: ["鳥類、羽毛鮮豔、卵生", "哺乳類、胎生", "脊椎、爬行"] },
+        { id: 72, name: "大象", trait: "哺乳類、草食、胎生", options: ["哺乳類、草食、胎生", "爬蟲類、卵生", "無脊椎、胎生"] },
+        { id: 73, name: "北極熊", trait: "哺乳類、肉食、恆溫", options: ["哺乳類、肉食、恆溫", "魚類、有鱗片", "鳥類、卵生"] },
+        { id: 74, name: "變色龍", trait: "爬蟲類、體色隨環境變", options: ["爬蟲類、體色隨環境變", "兩棲類、皮膚濕潤", "無脊椎、昆蟲"] },
+        { id: 75, name: "金魚", trait: "魚類、有側線、鰓呼吸", options: ["魚類、有側線、鰓呼吸", "哺乳類、胎生", "無脊椎、鰓呼吸"] },
+        { id: 76, name: "螞蟻", trait: "昆蟲、有觸角、社會性", options: ["昆蟲、有觸角、社會性", "脊椎、八隻腳", "無脊椎、非昆蟲"] },
+        { id: 77, name: "蝸牛", trait: "軟體動物、用腹足爬行", options: ["軟體動物、用腹足爬行", "節肢動物、外骨骼", "脊椎、卵生"] },
+        { id: 78, name: "蛤蜊", trait: "軟體動物、二枚貝、斧足", options: ["軟體動物、二枚貝、斧足", "環節動物、無殼", "脊椎動物"] },
+        { id: 79, name: "海星", trait: "棘皮動物、管足、再生力", options: ["棘皮動物、管足、再生力", "軟體動物、腹足", "脊椎、魚類"] },
+        { id: 80, name: "黑面琵鷺", trait: "鳥類、扁平嘴、遷移性", options: ["鳥類、扁平嘴、遷移性", "哺乳類、留鳥", "脊椎、卵胎生"] },
+
+        // 菌類與環境 (81-100)
+        { id: 81, name: "香菇", trait: "真菌類、用孢子繁殖", options: ["真菌類、用孢子繁殖", "植物、開花繁殖", "動物、肉食性"] },
+        { id: 82, name: "木耳", trait: "真菌類、分解枯木獲養分", options: ["真菌類、分解枯木獲養分", "植物、光合作用", "動物、胎生"] },
+        { id: 83, name: "黴菌", trait: "真菌類、絲狀、無根莖葉", options: ["真菌類、絲狀、無根莖葉", "植物、陽光充足生長", "動物、有感官"] },
+        { id: 84, name: "酵母菌", trait: "真菌類、微小、用於發酵", options: ["真菌類、微小、用於發酵", "植物、製造澱粉", "動物、有神經"] },
+        { id: 85, name: "靈芝", trait: "真菌類、外型堅硬如漆", options: ["真菌類、外型堅硬如漆", "植物、平行脈", "動物、脊椎動物"] },
+        { id: 86, name: "冬蟲夏草", trait: "真菌類、寄生昆蟲幼蟲", options: ["真菌類、寄生昆蟲幼蟲", "純粹的植物根部", "一種新型爬蟲類"] },
+        { id: 87, name: "水生植物", trait: "需要陽光、空氣、水、養分", options: ["需要陽光、空氣、水、養分", "不需要陽光", "不需要水"] },
+        { id: 88, name: "石花菜", trait: "藻類、無根莖葉分化", options: ["藻類、無根莖葉分化", "木本植物、網狀脈", "真菌類、孢子"] },
+        { id: 89, name: "地衣", trait: "藻類與真菌的共生體", options: ["藻類與真菌的共生體", "純植物、開花", "純動物、胎生"] },
+        { id: 90, name: "草履蟲", trait: "單細胞生物、微小觀察", options: ["單細胞生物、微小觀察", "多細胞植物、肉眼可見", "脊椎動物"] },
+        { id: 91, name: "生態系", trait: "包含生物及其生存環境", options: ["包含生物及其生存環境", "只有動物組成的", "只有環境不含生物"] },
+        { id: 92, name: "分解者", trait: "將有機物轉化為無機物", options: ["將有機物轉化為無機物", "製造氧氣的植物", "捕捉獵物的獵人"] },
+        { id: 93, name: "生產者", trait: "能行光合作用製造能量", options: ["能行光合作用製造能量", "吃植物的動物", "分解廢棄物的菌類"] },
+        { id: 94, name: "消費者", trait: "攝食生產者或其他消費者", options: ["攝食生產者或其他消費者", "自行光合作用", "分解枯枝落葉"] },
+        { id: 95, name: "食物鏈", trait: "描述生物間能量傳遞關係", options: ["描述生物間能量傳遞關係", "植物生長的順序", "動物遷移的路線"] },
+        { id: 96, name: "棲息地", trait: "提供生物生存所需的場域", options: ["提供生物生存所需的場域", "生物睡覺的床", "生物排泄的場所"] },
+        { id: 97, name: "瀕危生物", trait: "棲息地被破壞而數量驟減", options: ["棲息地被破壞而數量驟減", "數量太多影響環境", "剛被發現的新物種"] },
+        { id: 98, name: "外來種", trait: "人為引入非原產地的物種", options: ["人為引入非原產地的物種", "本地特有的生物", "已經絕種的生物"] },
+        { id: 99, name: "光合作用", trait: "植物在葉綠體中合成葡萄糖", options: ["植物在葉綠體中合成葡萄糖", "吸收氧氣吐出水蒸氣", "真菌分解木材的過程"] },
+        { id: 100, name: "生物多樣性", trait: "豐富的物種有助生態穩定", options: ["豐富的物種有助生態穩定", "全地球只有一種生物", "環境受到嚴重污染"] }
+    ];
+
+    let currentQuestions = [];
+    let currentIndex = 0;
+    let score = 0;
+    let history = [];
+
+    // --- 核心邏輯：管理題庫與隨機出題 ---
+    function getNextBatch() {
+        let usedIds = JSON.parse(localStorage.getItem('used_bio_ids') || '[]');
+        
+        // 若全部出過則重置
+        if (usedIds.length >= fullBank.length) {
+            alert("恭喜完成 100 題挑戰！題庫將重新洗牌。");
+            usedIds = [];
+        }
+
+        let available = fullBank.filter(q => !usedIds.includes(q.id));
+        available.sort(() => Math.random() - 0.5); // 洗牌
+        
+        const batch = available.slice(0, 6);
+        
+        // 儲存已出過的題目 ID
+        const newUsed = [...usedIds, ...batch.map(q => q.id)];
+        localStorage.setItem('used_bio_ids', JSON.stringify(newUsed));
+        
+        return batch;
+    }
+
+    // --- 遊戲流程控制 ---
+    function startGame() {
+        currentQuestions = getNextBatch();
+        currentIndex = 0;
+        score = 0;
+        history = [];
+        
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('result-screen').classList.add('hidden');
+        document.getElementById('game-screen').classList.remove('hidden');
+        
+        showQuestion();
+    }
+
+    function showQuestion() {
+        const q = currentQuestions[currentIndex];
+        document.getElementById('q-count').innerText = currentIndex + 1;
+        document.getElementById('target-name').innerText = q.name;
+        
+        const optionsDiv = document.getElementById('options');
+        optionsDiv.innerHTML = '';
+        
+        // 選項隨機排列
+        const shuffledOptions = [...q.options].sort(() => Math.random() - 0.5);
+        
+        shuffledOptions.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.innerText = opt;
+            btn.onclick = () => handleAnswer(opt, q.trait);
+            optionsDiv.appendChild(btn);
+        });
+    }
+
+    function handleAnswer(selected, correct) {
+        const isCorrect = (selected === correct);
+        if (isCorrect) score += 100;
+        
+        history.push({
+            name: currentQuestions[currentIndex].name,
+            selected: selected,
+            correct: correct,
+            status: isCorrect
+        });
+
+        currentIndex++;
+        if (currentIndex < 6) {
+            showQuestion();
+        } else {
+            showResult();
+        }
+    }
+
+    function showResult() {
+        document.getElementById('game-screen').classList.add('hidden');
+        document.getElementById('result-screen').classList.remove('hidden');
+        
+        const avgScore = score / 6;
+        document.getElementById('final-score').innerText = `本次得分：${Math.round(avgScore)}`;
+        
+        const comment = document.getElementById('score-comment');
+        if(avgScore === 100) comment.innerText = "太棒了！你是生物大師！🥇";
+        else if(avgScore >= 80) comment.innerText = "非常出色，對生物特徵很了解喔！✨";
+        else comment.innerText = "再接再厲，多觀察身邊的生物吧！🌱";
+
+        // 生成回顧清單
+        const list = document.getElementById('review-list');
+        list.innerHTML = '<h3 style="border-bottom: 2px solid var(--accent-green); padding-bottom: 5px;">題目回顧：</h3>';
+        history.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'review-item';
+            div.innerHTML = `
+                <div>
+                    <strong>${item.name}</strong><br>
+                    <small style="color: #666;">你的選擇: ${item.selected}</small>
+                </div>
+                <span class="${item.status ? 'correct' : 'wrong'}">
+                    ${item.status ? '✓ 正確' : '✗ 正解：' + item.correct}
+                </span>
+            `;
+            list.appendChild(div);
+        });
+    }
+</script>
+
+</body>
+</html>
